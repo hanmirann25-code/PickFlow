@@ -52,6 +52,9 @@ const OPTIONS = {
 /** 합격 기준: 5분. harness.mdc의 seed 항목. */
 const TARGET_SECONDS = 300;
 
+/** 업무 기준시는 한국 시간이다. 주문번호의 날짜를 찍을 때 쓴다. */
+const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
+
 const TABLES_TO_REPORT = [
   "USERS",
   "PRODUCTS",
@@ -340,7 +343,13 @@ async function seedOrders(conn: oracledb.Connection, rand: () => number): Promis
       const index = offset + i;
       const id = index + 1;
       const orderedAt = new Date(baseMs - Math.floor(rand() * spanMs));
-      const stamp = orderedAt.toISOString().slice(0, 10).replace(/-/g, "");
+      // 주문번호의 날짜는 업무 기준시(KST)로 찍는다.
+      // toISOString()은 UTC라, 한국 시간 새벽 주문이 전날 번호를 달게 된다.
+      // 화면에 보이는 주문일시·기간 필터와 주문번호의 날짜가 어긋나면 안 된다.
+      const stamp = new Date(orderedAt.getTime() + KST_OFFSET_MS)
+        .toISOString()
+        .slice(0, 10)
+        .replace(/-/g, "");
 
       orders.push({
         id,

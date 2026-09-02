@@ -24,6 +24,11 @@ export type OrderListParams = {
   page: number;
   size: number;
   sort: SortKey;
+  status?: readonly string[];
+  channel?: readonly string[];
+  q?: string;
+  from?: string;
+  to?: string;
 };
 
 export function toSearchParams(params: OrderListParams): URLSearchParams {
@@ -31,6 +36,12 @@ export function toSearchParams(params: OrderListParams): URLSearchParams {
   search.set("page", String(params.page));
   search.set("size", String(params.size));
   search.set("sort", params.sort);
+  // 배열 조건은 같은 이름으로 여러 번 붙인다. 서버가 getAll로 받는다.
+  for (const value of params.status ?? []) search.append("status", value);
+  for (const value of params.channel ?? []) search.append("channel", value);
+  if (params.q) search.set("q", params.q);
+  if (params.from) search.set("from", params.from);
+  if (params.to) search.set("to", params.to);
   return search;
 }
 

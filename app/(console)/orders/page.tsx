@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import type { Metadata } from "next";
 import { OrdersTable } from "@/components/orders/orders-table";
 
@@ -13,7 +14,19 @@ export default function OrdersPage() {
         <p className="font-mono text-xs text-slate-600">S-03</p>
       </div>
 
-      <OrdersTable />
+      {/*
+        OrdersTable은 useSearchParams로 조회 조건을 읽는다.
+        Next는 그 훅을 쓰는 트리에 Suspense 경계를 요구한다.
+      */}
+      <Suspense
+        fallback={
+          <p role="status" className="py-10 text-center text-sm text-slate-600">
+            주문 목록을 준비하는 중입니다…
+          </p>
+        }
+      >
+        <OrdersTable />
+      </Suspense>
     </section>
   );
 }

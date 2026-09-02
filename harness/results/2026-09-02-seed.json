@@ -1,6 +1,6 @@
 {
   "name": "seed",
-  "runAt": "2026-09-02T05:35:43.622Z",
+  "runAt": "2026-09-02T23:47:28.512Z",
   "conditions": {
     "products": 5000,
     "locations": 2000,
@@ -15,7 +15,7 @@
     {
       "key": "elapsedSeconds",
       "unit": "s",
-      "value": 27,
+      "value": 19.7,
       "target": 300,
       "pass": true
     },

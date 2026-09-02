@@ -1,16 +1,27 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { createColumnHelper, tableFeatures, useTable } from "@tanstack/react-table";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { fetchOrders, type OrderRow } from "@/lib/orders/client";
 import type { SortKey } from "@/lib/orders/list-query";
+import {
+  EMPTY_FILTERS,
+  parseFilters,
+  serializeFilters,
+  type OrderFilters,
+} from "@/lib/orders/url-state";
+import { OrdersFilters } from "./orders-filters";
 
 /**
- * 주문 목록 표 — 2단계: 가상 스크롤 + 무한 스크롤.
+ * 주문 목록 표 — 3단계: 필터 + URL 동기화.
  *
- * 필터·URL 동기화(3단계), 다중 선택(4단계)은 아직 없다.
+ * 다중 선택(4단계)은 아직 없다.
+ *
+ * 조회 조건의 출처는 URL 하나다. 컴포넌트가 조건을 따로 들고 있지 않으므로
+ * 새로고침해도, 주소를 복사해 보내도 같은 화면이 나온다.
  *
  * 스크롤하면 다음 페이지를 이어 붙이고, 화면에 보이는 30여 행만 실제로 그린다.
  * 10만 건을 전부 DOM에 만들면 브라우저가 멈춘다.
@@ -69,15 +80,53 @@ const columns = helper.columns([
 ]);
 
 export function OrdersTable() {
-  const [sort, setSort] = useState<SortKey>("orderedAt:desc");
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  // 조회 조건은 URL에서만 읽는다. 컴포넌트가 사본을 들고 있으면 둘이 어긋난다.
+  const filters = useMemo(
+    () => parseFilters(new URLSearchParams(searchParams.toString())),
+    [searchParams],
+  );
+  const sort = filters.sort;
+
   /** 키보드로 이동 중인 행. 가상 스크롤에서 포커스를 잃지 않기 위한 기준점이다. */
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
 
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  /**
+   * 조건을 URL에 반영한다.
+   *
+   * replace를 쓰면 히스토리에 쌓이지 않는다. 검색어처럼 자주 바뀌는 값에 쓴다.
+   * 체크박스·날짜처럼 사용자가 의식적으로 누른 조작은 push로 남겨
+   * 뒤로 가기로 되돌릴 수 있게 한다.
+   */
+  const applyFilters = useCallback(
+    (next: OrderFilters, mode: "push" | "replace" = "push") => {
+      const params = serializeFilters(next);
+      const url = params.size > 0 ? `${pathname}?${params}` : pathname;
+      // scroll: false — 목록 위치를 건드리지 않는다.
+      router[mode](url, { scroll: false });
+    },
+    [pathname, router],
+  );
+
   const query = useInfiniteQuery({
-    queryKey: ["orders", { size: PAGE_SIZE, sort }],
-    queryFn: ({ pageParam }) => fetchOrders({ page: pageParam, size: PAGE_SIZE, sort }),
+    // 서버가 처리하는 조건은 전부 키에 넣는다. 하나라도 빠지면 옛 결과가 남는다.
+    queryKey: ["orders", { size: PAGE_SIZE, ...filters }],
+    queryFn: ({ pageParam }) =>
+      fetchOrders({
+        page: pageParam,
+        size: PAGE_SIZE,
+        sort: filters.sort,
+        status: filters.status,
+        channel: filters.channel,
+        q: filters.q,
+        from: filters.from,
+        to: filters.to,
+      }),
     initialPageParam: 1,
     getNextPageParam: (last) =>
       last.page.page < last.page.totalPages ? last.page.page + 1 : undefined,
@@ -112,7 +161,7 @@ export function OrdersTable() {
     if (lastIndex >= modelRows.length - 20) query.fetchNextPage();
   }, [lastIndex, modelRows.length, query]);
 
-  // 정렬이 바뀌면 처음부터 다시 본다.
+  // 조건이 바뀌면 목록이 완전히 달라지므로 맨 위에서 다시 본다.
   //
   // 의존성에 virtualizer를 넣으면 안 된다. 렌더마다 이 effect가 다시 돌면서
   // setActiveIndex(null)이 활성 행을 지운다. 그러면 포커스 관리 effect가
@@ -120,10 +169,11 @@ export function OrdersTable() {
   const virtualizerRef = useRef(virtualizer);
   virtualizerRef.current = virtualizer;
 
+  const filterKey = searchParams.toString();
   useEffect(() => {
     virtualizerRef.current.scrollToOffset(0);
     setActiveIndex(null);
-  }, [sort]);
+  }, [filterKey]);
 
   /**
    * 활성 행으로 포커스를 옮긴다.
@@ -198,6 +248,12 @@ export function OrdersTable() {
     }
   }
 
+  // 검색어는 타이핑마다 바뀌므로 히스토리에 쌓지 않는다(replace).
+  const handleSearchChange = useCallback(
+    (q: string) => applyFilters({ ...filters, q }, "replace"),
+    [applyFilters, filters],
+  );
+
   const sortState = useMemo(() => {
     const [key, direction] = sort.split(":");
     return { key, direction: direction as "asc" | "desc" };
@@ -206,9 +262,9 @@ export function OrdersTable() {
   function toggleSort(columnId: string) {
     const options = SORTABLE[columnId];
     if (!options) return;
-    setSort(
-      sortState.key === columnId && sortState.direction === "asc" ? options.desc : options.asc,
-    );
+    const next: SortKey =
+      sortState.key === columnId && sortState.direction === "asc" ? options.desc : options.asc;
+    applyFilters({ ...filters, sort: next });
   }
 
   const paddingTop = virtualItems[0]?.start ?? 0;
@@ -217,6 +273,15 @@ export function OrdersTable() {
 
   return (
     <div className="space-y-3">
+      <OrdersFilters
+        filters={filters}
+        onChange={(next) => applyFilters(next, "push")}
+        onSearchChange={handleSearchChange}
+        onReset={() => applyFilters({ ...EMPTY_FILTERS, sort: filters.sort }, "push")}
+        resultCount={query.isPending ? null : total}
+        isFetching={query.isFetching && !query.isFetchingNextPage}
+      />
+
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-slate-700">
         <p>
           전체 <strong className="font-semibold text-slate-900">{total.toLocaleString()}</strong> 건
