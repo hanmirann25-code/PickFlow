@@ -50,3 +50,6 @@ next-env.d.ts
 
 # harness/results 는 의도적으로 커밋한다 (수치의 재현 근거).
 # 여기에 추가하지 말 것 — AGENTS.md 하네스 규칙 참고.
+
+# 편집기 백업 파일
+*.bak
