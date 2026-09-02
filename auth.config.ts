@@ -1,5 +1,6 @@
 import type { NextAuthConfig } from "next-auth";
-import { isRole } from "@/lib/auth/roles";
+import { can, isRole } from "@/lib/auth/roles";
+import { navItemForPath } from "@/lib/nav";
 
 /**
  * 미들웨어와 서버가 함께 쓰는 설정.
@@ -45,8 +46,22 @@ export const authConfig = {
         return true;
       }
 
-      // 로그인했으면 통과, 아니면 Auth.js가 /login으로 보낸다.
-      return Boolean(auth?.user);
+      // 로그인하지 않았으면 Auth.js가 /login으로 보낸다.
+      const role = auth?.user?.role;
+      if (!isRole(role)) return false;
+
+      // 메뉴를 숨기는 것만으로는 부족하다. 주소창에 직접 쳐서 들어올 수 있으므로
+      // 경로를 담당하는 메뉴의 권한을 여기서 다시 검사한다.
+      //
+      // 대시보드('/')는 검사에서 뺀다. 되돌려 보낼 곳이 대시보드인데
+      // 대시보드까지 막으면 리다이렉트가 무한히 반복된다.
+      // 메뉴가 하나도 없는 역할(PICKER)에게는 레이아웃이 안내 문구를 보여준다.
+      const item = navItemForPath(pathname);
+      if (item && item.href !== "/" && !can(role, item.permission)) {
+        return Response.redirect(new URL("/", request.nextUrl));
+      }
+
+      return true;
     },
   },
 } satisfies NextAuthConfig;

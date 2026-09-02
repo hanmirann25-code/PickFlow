@@ -19,7 +19,11 @@ export function isRole(value: unknown): value is Role {
 export const PERMISSIONS = [
   "order:read",
   "order:cancel",
+  // 기획서 4-2 매트릭스에는 재고·웨이브의 "실행" 권한만 있고 조회 권한이 없다.
+  // 4-1의 "VIEWER = 읽기만 가능"을 화면 단위로 표현하려면 읽기 권한이 따로 필요해 나눴다.
+  "inventory:read",
   "inventory:allocate",
+  "wave:read",
   "wave:manage",
   "picking:perform",
   "packing:register",
@@ -38,16 +42,27 @@ const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
   ADMIN: [
     "order:read",
     "order:cancel",
+    "inventory:read",
     "inventory:allocate",
+    "wave:read",
     "wave:manage",
     "picking:perform",
     "packing:register",
     "user:manage",
     "audit:read",
   ],
-  OPERATOR: ["order:read", "order:cancel", "inventory:allocate", "wave:manage", "packing:register"],
+  OPERATOR: [
+    "order:read",
+    "order:cancel",
+    "inventory:read",
+    "inventory:allocate",
+    "wave:read",
+    "wave:manage",
+    "packing:register",
+  ],
+  // 현장 작업자는 모바일 피킹 화면만 쓴다. 관리자 콘솔 메뉴는 하나도 보이지 않는다.
   PICKER: ["picking:perform"],
-  VIEWER: ["order:read"],
+  VIEWER: ["order:read", "inventory:read", "wave:read"],
 };
 
 export function can(role: Role, permission: Permission): boolean {
