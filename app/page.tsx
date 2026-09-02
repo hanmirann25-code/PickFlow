@@ -1,83 +1,84 @@
-import Image from "next/image";
+import { redirect } from "next/navigation";
+import { currentUser } from "@/lib/auth/guard";
+import { permissionsOf } from "@/lib/auth/roles";
+import { SignOutButton } from "./sign-out-button";
 
-export default function Home() {
+/**
+ * 임시 홈 화면.
+ *
+ * 로그인이 됐고 세션에 역할이 실려 있는지 눈으로 확인하기 위한 최소 화면이다.
+ * 사이드바·상단바를 갖춘 실제 콘솔 레이아웃은 P7에서 만든다.
+ */
+export default async function HomePage() {
+  const user = await currentUser();
+
+  // 미들웨어가 이미 막지만, 서버에서 한 번 더 확인한다.
+  if (!user) redirect("/login");
+
+  const permissions = permissionsOf(user.role);
+
   return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">Save and see your changes instantly.</li>
-        </ol>
-
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+    <div className="min-h-dvh bg-slate-100">
+      <header className="border-b border-slate-300 bg-white">
+        <div className="mx-auto flex max-w-3xl items-center justify-between gap-4 px-4 py-4">
+          <h1 className="text-lg font-bold text-slate-900">PickFlow</h1>
+          <SignOutButton />
         </div>
+      </header>
+
+      <main className="mx-auto max-w-3xl px-4 py-8">
+        <section
+          aria-labelledby="session-heading"
+          className="rounded-lg border border-slate-300 bg-white p-6"
+        >
+          <h2 id="session-heading" className="text-base font-semibold text-slate-900">
+            로그인 정보
+          </h2>
+
+          <dl className="mt-4 grid grid-cols-[6rem_1fr] gap-x-4 gap-y-2 text-sm">
+            <dt className="font-medium text-slate-700">이름</dt>
+            <dd className="text-slate-900">{user.name}</dd>
+            <dt className="font-medium text-slate-700">이메일</dt>
+            <dd className="font-mono text-slate-900">{user.email}</dd>
+            <dt className="font-medium text-slate-700">역할</dt>
+            <dd className="text-slate-900">{user.role}</dd>
+          </dl>
+        </section>
+
+        <section
+          aria-labelledby="permissions-heading"
+          className="mt-6 rounded-lg border border-slate-300 bg-white p-6"
+        >
+          <h2 id="permissions-heading" className="text-base font-semibold text-slate-900">
+            이 역할의 권한
+          </h2>
+          <p className="mt-1 text-sm text-slate-700">
+            lib/auth/roles.ts의 정의에서 가져온 값입니다. 화면과 서버가 같은 정의를 봅니다.
+          </p>
+          <ul className="mt-3 flex flex-wrap gap-2">
+            {permissions.map((permission) => (
+              <li
+                key={permission}
+                className="rounded border border-slate-300 bg-slate-50 px-2 py-1 font-mono text-xs text-slate-800"
+              >
+                {permission}
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        <section
+          aria-labelledby="next-heading"
+          className="mt-6 rounded-lg border border-slate-300 bg-white p-6"
+        >
+          <h2 id="next-heading" className="text-base font-semibold text-slate-900">
+            다음 단계
+          </h2>
+          <p className="mt-1 text-sm text-slate-700">
+            사이드바와 상단바를 갖춘 콘솔 레이아웃은 P7에서, 주문 목록은 P10에서 만듭니다.
+          </p>
+        </section>
       </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image aria-hidden src="/file.svg" alt="File icon" width={16} height={16} />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image aria-hidden src="/window.svg" alt="Window icon" width={16} height={16} />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image aria-hidden src="/globe.svg" alt="Globe icon" width={16} height={16} />
-          Go to nextjs.org →
-        </a>
-      </footer>
     </div>
   );
 }
