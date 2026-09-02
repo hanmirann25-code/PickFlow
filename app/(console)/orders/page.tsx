@@ -1,15 +1,19 @@
 import type { Metadata } from "next";
-import { Placeholder } from "@/components/console/placeholder";
+import { OrdersTable } from "@/components/orders/orders-table";
 
 export const metadata: Metadata = { title: "주문 목록 · PickFlow" };
 
-export default function Page() {
+export default function OrdersPage() {
   return (
-    <Placeholder
-      screen="S-03"
-      title="주문 목록"
-      plannedAt="P9~P10"
-      description="10만 건 규모에서 끊기지 않는 가상 스크롤 목록. 필터·정렬·페이지는 URL에 반영합니다."
-    />
+    <section aria-labelledby="page-title" className="space-y-4">
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <h1 id="page-title" className="text-xl font-bold text-slate-900">
+          주문 목록
+        </h1>
+        <p className="font-mono text-xs text-slate-600">S-03</p>
+      </div>
+
+      <OrdersTable />
+    </section>
   );
 }
