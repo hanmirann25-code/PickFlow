@@ -1,0 +1,85 @@
+---
+description: 검증 하네스 스크립트 작성 규칙
+globs: ["harness/**"]
+alwaysApply: false
+---
+
+# 하네스 작성 규칙
+
+하네스는 이 프로젝트의 주장을 **재현 가능하게** 만드는 장치다.
+"빠르다", "안 깨진다"는 말이 아니라 명령 한 줄로 다시 나오는 수치여야 한다.
+
+## 구조
+
+```
+harness/
+  seed.ts          데이터 생성
+  concurrency.ts   동시 요청 발사 + 검증
+  perf.ts          성능 측정
+  offline.ts       오프라인 동기화 검증
+  invariants.ts    정합성 8개 조건 검사
+  report.ts        results → README 갱신
+  lib/db.ts        하네스 전용 DB 연결
+  results/         실행 결과 JSON (커밋한다)
+```
+
+## 공통 규칙
+
+- 앱 코드를 import하지 않는다. DB에 직접 붙는다 (앱이 죽어 있어도 돌아가야 한다)
+- 모든 하네스는 **실패 시 종료 코드 1**을 반환한다. 사람이 눈으로 판정하지 않는다
+- 실행 결과는 `harness/results/YYYY-MM-DD-<이름>.json`으로 남긴다
+- 옵션은 인자로 받는다 (`--orders 100000`). 코드에 숫자를 박지 않는다
+- 시드값을 고정한다. 매번 같은 데이터가 나와야 비교가 된다
+- 운영 DB를 향해 실행되지 않도록, 접속 대상이 개발/데모 DB인지 먼저 확인하고 아니면 중단한다
+
+## 결과 JSON 형식
+
+```json
+{
+  "name": "perf",
+  "runAt": "2026-08-28T21:00:00+09:00",
+  "conditions": {
+    "orders": 100000,
+    "orderItems": 250000,
+    "env": "https://데모주소",
+    "browser": "Chrome 최신",
+    "repeat": 5
+  },
+  "metrics": [
+    { "key": "listFirstRender", "unit": "ms", "median": 240, "p95": 310, "target": 300, "pass": true }
+  ],
+  "pass": true
+}
+```
+
+- **평균을 쓰지 않는다.** 중앙값과 최악값(p95)을 함께 기록한다
+- 측정 조건(`conditions`)을 반드시 함께 저장한다. 조건 없는 수치는 의미가 없다
+
+## 하네스별 합격 기준
+
+| 하네스 | 합격 조건 |
+|---|---|
+| seed | 5분 이내 완료, 재고 합계 일치 |
+| concurrency | 성공 1 / 실패 N−1, 최종 가용 재고 0, 음수 없음, **직후 invariants 전부 통과** |
+| perf | 목록 첫 렌더 300ms 이하 / 스크롤 55fps 이상 / 필터 500ms 이하 |
+| offline | 요청한 건수만큼 정확히 반영, 중복 0건 |
+| invariants | 8개 조건 전부 참 |
+
+## 정합성 조건 8가지 (invariants.ts)
+
+1. 모든 재고 행에서 `0 ≤ QTY_ALLOCATED ≤ QTY_ON_HAND`
+2. 가용 재고가 음수인 행 0건
+3. 상품별 `ORDER_ITEMS.ALLOCATED_QTY` 합계 = `INVENTORY.QTY_ALLOCATED` 합계
+4. `SHIPPED` 주문의 모든 항목에서 `PICKED_QTY = QTY`
+5. 상태 변경 횟수 = `AUDIT_LOGS`의 상태 변경 기록 수
+6. 재고 증감 총합 = `INVENTORY_TRANSACTIONS`의 델타 총합
+7. 완료된 웨이브에 `PENDING` 작업 0건
+8. 같은 멱등키로 두 번 처리된 건 0건
+
+각 조건은 실패 시 **어떤 행이 어긋났는지**까지 출력한다. "실패"만 찍으면 디버깅이 불가능하다.
+
+## report.ts
+
+- `results/`의 최신 JSON을 읽어 README의 `<!-- HARNESS:START -->` ~ `<!-- HARNESS:END -->` 사이를 갱신한다
+- 마커 밖의 내용은 건드리지 않는다
+- 기준 미달 항목은 표에 그대로 표시하고 숨기지 않는다
