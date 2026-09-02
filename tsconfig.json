@@ -11,6 +11,10 @@
     "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "isolatedModules": true,
+    // 하네스는 Node가 타입만 벗겨 바로 실행한다(node harness/x.ts).
+    // 그 방식은 import에 .ts 확장자를 요구하는데, TS는 기본적으로 이를 막는다.
+    // noEmit이 true라 이 옵션을 켤 수 있다.
+    "allowImportingTsExtensions": true,
     "jsx": "preserve",
     "incremental": true,
     "plugins": [

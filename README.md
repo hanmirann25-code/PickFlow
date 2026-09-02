@@ -91,6 +91,40 @@ DB 연결 상태는 <http://localhost:3000/api/health> 에서 확인한다.
 
 커밋하면 `typecheck` → `lint-staged`가 자동으로 돈다.
 
+### 하네스
+
+검증·데이터 생성 스크립트는 `harness/`에 독립 실행 스크립트로 둔다.
+앱 코드를 import하지 않으므로 앱이 떠 있지 않아도 돌아간다.
+
+| 명령                      | 하는 일                                                                        |
+| ------------------------- | ------------------------------------------------------------------------------ |
+| `pnpm harness:seed-small` | 개발 확인용 소량 데이터 (상품 20 / 로케이션 30 / 재고 50 / 주문 10 / 사용자 4) |
+
+```bash
+# 규모를 바꾸려면 인자로 넘긴다
+pnpm harness:seed-small -- --products 50 --orders 100
+```
+
+- **실행할 때마다 기존 데이터를 전부 지우고 다시 넣는다.**
+- 시드값이 고정돼 있어 같은 옵션이면 항상 같은 데이터가 나온다.
+- 접속 대상이 `localhost`가 아니면 실행을 거부한다.
+  의도한 것이라면 `HARNESS_ALLOW_REMOTE=1`을 설정한다.
+- 건수가 맞지 않으면 종료 코드 1로 끝난다.
+
+TypeScript는 Node 22의 타입 스트리핑으로 그대로 실행한다. 별도 빌드나 `tsx`가 필요 없다.
+그래서 `harness/` 안의 import는 `.ts` 확장자를 붙여야 한다.
+
+### 데모 계정
+
+`harness:seed-small`이 만드는 계정. 비밀번호는 전부 `demo1234`.
+
+| 역할     | 계정           |
+| -------- | -------------- |
+| ADMIN    | admin@demo.io  |
+| OPERATOR | ops@demo.io    |
+| PICKER   | picker@demo.io |
+| VIEWER   | viewer@demo.io |
+
 ---
 
 ## 데이터 모델
