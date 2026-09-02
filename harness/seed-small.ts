@@ -220,12 +220,20 @@ async function seedInventory(conn: oracledb.Connection, rand: () => number): Pro
   }
 
   const wanted = Math.min(OPTIONS.inventory, pairs.length);
-  const rows = pairs.slice(0, wanted).map((pair, index) => {
-    const onHand = intBetween(rand, 0, 200);
-    // 할당량은 실재고를 넘을 수 없다(CK_INVENTORY_QTY).
-    const allocated = onHand === 0 ? 0 : intBetween(rand, 0, Math.floor(onHand / 2));
-    return { id: index + 1, ...pair, onHand, allocated };
-  });
+  const rows = pairs.slice(0, wanted).map((pair, index) => ({
+    id: index + 1,
+    ...pair,
+    onHand: intBetween(rand, 1, 200),
+    // 할당량은 반드시 0으로 시작한다.
+    //
+    // 여기에 난수를 넣으면 정합성 조건 3(상품별 ORDER_ITEMS.ALLOCATED_QTY 합계 =
+    // INVENTORY.QTY_ALLOCATED 합계)이 처음부터 깨진다. 주문은 전부 RECEIVED라
+    // 할당된 수량이 0이기 때문이다.
+    //
+    // 재고 할당은 PL/SQL 프로시저를 거쳐야만 한다(AGENTS.md 절대 규칙).
+    // 시드가 할당된 척하는 데이터를 만들어두면 그 규칙을 우회하는 셈이다.
+    allocated: 0,
+  }));
 
   await conn.executeMany(
     `INSERT INTO INVENTORY (ID, PRODUCT_ID, LOCATION_ID, QTY_ON_HAND, QTY_ALLOCATED)

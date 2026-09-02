@@ -11,6 +11,7 @@
     "typecheck": "tsc --noEmit",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
+    "harness:seed": "node --env-file=.env.local harness/seed.ts",
     "harness:seed-small": "node --env-file=.env.local harness/seed-small.ts",
     "prepare": "husky"
   },

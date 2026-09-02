@@ -1,0 +1,80 @@
+{
+  "name": "seed",
+  "runAt": "2026-09-02T05:35:43.622Z",
+  "conditions": {
+    "products": 5000,
+    "locations": 2000,
+    "inventory": 10000,
+    "orders": 100000,
+    "batch": 10000,
+    "seed": 20260902,
+    "target": "300s",
+    "orderItems": 249906
+  },
+  "metrics": [
+    {
+      "key": "elapsedSeconds",
+      "unit": "s",
+      "value": 27,
+      "target": 300,
+      "pass": true
+    },
+    {
+      "key": "rows.USERS",
+      "unit": "rows",
+      "value": 4,
+      "target": 4,
+      "pass": true
+    },
+    {
+      "key": "rows.PRODUCTS",
+      "unit": "rows",
+      "value": 5000,
+      "target": 5000,
+      "pass": true
+    },
+    {
+      "key": "rows.LOCATIONS",
+      "unit": "rows",
+      "value": 2000,
+      "target": 2000,
+      "pass": true
+    },
+    {
+      "key": "rows.INVENTORY",
+      "unit": "rows",
+      "value": 10000,
+      "target": 10000,
+      "pass": true
+    },
+    {
+      "key": "rows.ORDERS",
+      "unit": "rows",
+      "value": 100000,
+      "target": 100000,
+      "pass": true
+    },
+    {
+      "key": "rows.ORDER_ITEMS",
+      "unit": "rows",
+      "value": 249906,
+      "target": 249906,
+      "pass": true
+    },
+    {
+      "key": "inventory.onHandSum",
+      "unit": "qty",
+      "value": 2503716,
+      "target": 2503716,
+      "pass": true
+    },
+    {
+      "key": "allocated.matches",
+      "unit": "qty",
+      "value": 0,
+      "target": 0,
+      "pass": true
+    }
+  ],
+  "pass": true
+}

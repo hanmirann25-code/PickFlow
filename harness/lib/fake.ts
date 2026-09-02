@@ -70,3 +70,22 @@ export function address(rand: Random): string {
 
 export const CHANNELS = ["스마트스토어", "자사몰", "오픈마켓", "라이브커머스"] as const;
 export const COURIERS = ["가온택배", "다온로지스", "한별택배"] as const;
+
+/**
+ * 주문 하나에 담기는 상품 줄 수 (1~5).
+ *
+ * 균등 분포로 뽑으면 평균이 3이라 주문 10만 건에 주문상품 30만 건이 나온다.
+ * 기획서가 잡은 규모는 25만 건이고, 실제 커머스 주문도 1~2줄에 몰린다.
+ * 아래 가중치의 기댓값은 2.5라 두 가지가 같이 맞는다.
+ *
+ *   1줄 30% · 2줄 25% · 3줄 20% · 4줄 15% · 5줄 10%
+ */
+const LINE_COUNT_THRESHOLDS = [0.3, 0.55, 0.75, 0.9] as const;
+
+export function orderLineCount(rand: Random): number {
+  const roll = rand();
+  for (let i = 0; i < LINE_COUNT_THRESHOLDS.length; i += 1) {
+    if (roll < LINE_COUNT_THRESHOLDS[i]) return i + 1;
+  }
+  return 5;
+}
