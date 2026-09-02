@@ -3,7 +3,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useInfiniteQuery } from "@tanstack/react-query";
-import { createColumnHelper, tableFeatures, useTable } from "@tanstack/react-table";
+import {
+  createColumnHelper,
+  rowSelectionFeature,
+  tableFeatures,
+  useTable,
+} from "@tanstack/react-table";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { fetchOrders, type OrderRow } from "@/lib/orders/client";
 import type { SortKey } from "@/lib/orders/list-query";
@@ -31,7 +36,7 @@ import { OrdersFilters } from "./orders-filters";
  * 스크롤 길이를 맞추는 방식을 쓴다.
  */
 
-const features = tableFeatures({});
+const features = tableFeatures({ rowSelectionFeature });
 const helper = createColumnHelper<typeof features, OrderRow>();
 const EMPTY: OrderRow[] = [];
 
@@ -62,7 +67,59 @@ function elapsedText(iso: string): string {
   return `${Math.floor(hours / 24)}일`;
 }
 
+/**
+ * 체크박스. HTML에는 "일부 선택됨" 속성이 없어 DOM에서 직접 넣어야 한다.
+ * 그래야 스크린리더가 "혼합됨"으로 읽는다.
+ */
+function SelectCheckbox({
+  checked,
+  indeterminate,
+  onChange,
+  label,
+}: {
+  checked: boolean;
+  indeterminate?: boolean;
+  onChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
+  label: string;
+}) {
+  const ref = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (ref.current) ref.current.indeterminate = indeterminate ?? false;
+  }, [indeterminate]);
+
+  return (
+    <input
+      ref={ref}
+      type="checkbox"
+      checked={checked}
+      onChange={onChange}
+      // 아이콘만 있는 요소라 이름을 따로 준다. 어떤 행인지 알 수 있어야 한다.
+      aria-label={label}
+      className="h-5 w-5 rounded border-slate-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700"
+    />
+  );
+}
+
 const columns = helper.columns([
+  helper.display({
+    id: "select",
+    header: ({ table }) => (
+      <SelectCheckbox
+        checked={table.getIsAllRowsSelected()}
+        indeterminate={table.getIsSomeRowsSelected()}
+        onChange={table.getToggleAllRowsSelectedHandler()}
+        label="불러온 주문 전체 선택"
+      />
+    ),
+    cell: ({ row }) => (
+      <SelectCheckbox
+        checked={row.getIsSelected()}
+        // 원본 클릭 이벤트를 그대로 넘긴다. Shift 범위 선택이 여기에 달려 있다.
+        onChange={row.getToggleSelectedHandler()}
+        label={`주문 ${row.original.orderNo} 선택`}
+      />
+    ),
+  }),
   helper.accessor("orderNo", { header: "주문번호" }),
   helper.accessor("channel", { header: "채널" }),
   helper.accessor("recipientName", { header: "수취인" }),
@@ -140,8 +197,17 @@ export function OrdersTable() {
 
   const total = query.data?.pages[0]?.page.total ?? 0;
 
-  const table = useTable({ features, columns, data: rows });
+  const table = useTable({
+    features,
+    columns,
+    data: rows,
+    // 선택은 주문 id로 기억한다. 인덱스로 기억하면 스크롤로 행이 늘어날 때
+    // 같은 인덱스가 다른 주문을 가리켜 엉뚱한 주문이 선택된다.
+    getRowId: (row) => String(row.id),
+  });
   const modelRows = table.getRowModel().rows;
+  const selectedIds = table.getSelectedRowIds();
+  const selectedCount = selectedIds.length;
 
   const virtualizer = useVirtualizer({
     count: modelRows.length,
@@ -169,10 +235,16 @@ export function OrdersTable() {
   const virtualizerRef = useRef(virtualizer);
   virtualizerRef.current = virtualizer;
 
+  const tableRef = useRef(table);
+  tableRef.current = table;
+
   const filterKey = searchParams.toString();
   useEffect(() => {
     virtualizerRef.current.scrollToOffset(0);
     setActiveIndex(null);
+    // 조건이 바뀌면 목록이 통째로 달라진다. 보이지도 않는 주문이 선택된 채로
+    // 남아 있으면 사용자가 무엇을 처리하는지 알 수 없다.
+    tableRef.current.resetRowSelection(true);
   }, [filterKey]);
 
   /**
@@ -243,6 +315,16 @@ export function OrdersTable() {
         event.preventDefault();
         moveActive(current - 20);
         break;
+      case " ":
+      case "Spacebar": {
+        // 행에 포커스가 있을 때만 처리한다.
+        // 체크박스 자체에 포커스가 있으면 브라우저 기본 동작에 맡긴다.
+        if (activeIndex === null) break;
+        if ((event.target as HTMLElement).tagName === "INPUT") break;
+        event.preventDefault();
+        modelRows[activeIndex]?.toggleSelected();
+        break;
+      }
       default:
         break;
     }
@@ -281,6 +363,32 @@ export function OrdersTable() {
         resultCount={query.isPending ? null : total}
         isFetching={query.isFetching && !query.isFetchingNextPage}
       />
+
+      {/*
+        선택 건수와 일괄 작업. 선택이 없으면 자리를 차지하지 않는다.
+        재고 할당·웨이브 생성은 P15·P18에서 이 선택을 입력으로 받는다.
+      */}
+      {selectedCount > 0 && (
+        <div
+          role="region"
+          aria-label="선택한 주문"
+          className="flex flex-wrap items-center gap-3 rounded-lg border border-blue-300 bg-blue-50 px-4 py-3"
+        >
+          <p aria-live="polite" className="text-sm font-medium text-blue-900">
+            {selectedCount.toLocaleString()}건 선택됨
+          </p>
+          <button
+            type="button"
+            onClick={() => table.resetRowSelection(true)}
+            className="min-h-11 rounded-md border border-blue-400 bg-white px-3 py-1.5 text-sm font-medium text-blue-900 hover:bg-blue-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700"
+          >
+            선택 해제
+          </button>
+          <p className="text-xs text-blue-900">
+            재고 할당·웨이브 생성은 P15·P18에서 이 선택을 받습니다.
+          </p>
+        </div>
+      )}
 
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-slate-700">
         <p>
