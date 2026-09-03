@@ -338,11 +338,69 @@ SHIPMENTS   INVENTORY_TRANSACTIONS   AUDIT_LOGS   IDEMPOTENCY_KEYS
 
 ## 상태 전이
 
-```
-RECEIVED → ALLOCATED → PICKING → PACKED → SHIPPED
-RECEIVED → BACKORDER → ALLOCATED
-어느 단계든 → HOLD / CANCELLED   (단, SHIPPED 이후 취소 불가)
+정의는 `lib/order-graph.ts`의 전이 표 **한 곳에만** 둔다. 표를 고치면 셋이 함께 바뀐다.
+
+1. 서버가 허용하는 전이 (`canTransition`)
+2. 화면에 뜨는 액션 버튼 (`availableActions`)
+3. 아래 다이어그램 (`toMermaid`)
+
+손으로 그린 그림은 표가 바뀌면 조용히 거짓말이 된다. 그래서 그림도 표에서 뽑는다.
+
+<!-- ORDER_GRAPH:START -->
+
+```mermaid
+stateDiagram-v2
+  [*] --> RECEIVED
+  RECEIVED --> ALLOCATED: 재고 할당
+  ALLOCATED --> PICKING: 피킹 시작
+  PICKING --> PACKED: 패킹 완료
+  PACKED --> SHIPPED: 출고 확정
+  RECEIVED --> BACKORDER: 품절 대기
+  BACKORDER --> ALLOCATED: 재고 할당
+  HOLD --> RECEIVED: 보류 해제
+  RECEIVED --> HOLD: 보류
+  ALLOCATED --> HOLD: 보류
+  PICKING --> HOLD: 보류
+  PACKED --> HOLD: 보류
+  BACKORDER --> HOLD: 보류
+  RECEIVED --> CANCELLED: 취소
+  BACKORDER --> CANCELLED: 취소
+  ALLOCATED --> CANCELLED: 취소
+  PICKING --> CANCELLED: 취소
+  PACKED --> CANCELLED: 취소
+  HOLD --> CANCELLED: 취소
+  SHIPPED --> [*]
+  CANCELLED --> [*]
+  RECEIVED: 접수
+  ALLOCATED: 할당완료
+  PICKING: 피킹중
+  PACKED: 패킹완료
+  SHIPPED: 출고완료
+  BACKORDER: 품절대기
+  HOLD: 보류
+  CANCELLED: 취소
 ```
 
-정의는 `lib/order-graph.ts` 한 곳에만 둔다. `ORDERS.STATUS`의 CHECK 제약은
-그 정의를 벗어난 값이 저장되는 것을 막는 마지막 방어선이다.
+<!-- ORDER_GRAPH:END -->
+
+<small>마커 사이는 P26의 report 하네스가 갱신한다. 손으로 고치지 말 것.</small>
+
+전이 18개. 각 전이에는 실행 가능한 역할, 사전 조건(guard), 따라붙는 훅(effects)이 함께 적혀 있다.
+
+| 훅                        | 실행 시점                                           |
+| ------------------------- | --------------------------------------------------- |
+| `audit` (감사 로그)       | 트랜잭션 **안**. 실패하면 전체 롤백                 |
+| `inventoryTx` (재고 이력) | 트랜잭션 **안**. 실패하면 전체 롤백                 |
+| `emit` (실시간 이벤트)    | 커밋 **이후**. 롤백됐는데 알림만 나가는 것을 막는다 |
+
+거부할 때는 사유를 함께 남긴다. "거부됨"만 기록하면 나중에 왜 막혔는지 알 수 없다.
+
+```
+RECEIVED → SHIPPED  : 접수에서 출고완료로는 바꿀 수 없습니다.
+                      가능한 상태: 할당완료, 품절대기, 보류, 취소
+SHIPPED → CANCELLED : 출고완료 주문은 더 이상 상태를 바꿀 수 없습니다.
+ALLOCATED → PICKING : 피킹 시작은 ADMIN, OPERATOR 역할만 할 수 있습니다. 현재 역할: PICKER
+```
+
+`ORDERS.STATUS`의 CHECK 제약은 이 정의를 벗어난 값이 **저장되는 것**을 막는 마지막
+방어선이다. 코드가 틀려도 DB에 이상한 상태가 남지 않는다.
