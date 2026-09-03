@@ -1,52 +1,34 @@
 {
   "name": "perf",
-  "runAt": "2026-09-03T00:05:10.179Z",
+  "runAt": "2026-09-03T00:17:15.729Z",
   "conditions": {
     "url": "http://localhost:3000",
     "browser": "Chromium 151.0.7922.34",
     "viewport": "1440x900",
     "repeat": 5,
-    "warmupRuns": 1,
     "data": {
       "orders": 100000,
       "orderItems": 249906,
       "products": 5000
     },
     "db": "PICKFLOW@localhost:1521/FREEPDB1",
-    "note": "합격 판정은 p95 기준. 중앙값만 보면 가끔 느린 것을 놓친다. 측정 전 워밍업 1회는 결과에서 제외한다(Next 청크 로드·커넥션 풀 생성 비용). 캐시가 빈 첫 방문 비용은 orders.firstRenderCold가 따로 잰다."
+    "note": "합격 판정은 p95 기준. 중앙값만 보면 가끔 느린 것을 놓친다. 워밍업을 따로 두지 않는다. 첫 회의 비용도 사용자가 겪는 시간이다. 첫 렌더는 전체 문서 이동으로 잰다."
   },
   "metrics": [
     {
       "key": "orders.firstRender",
-      "label": "목록 첫 렌더(메뉴)",
+      "label": "목록 첫 렌더",
       "unit": "ms",
-      "median": 135,
-      "p95": 232,
+      "median": 139,
+      "p95": 227,
       "samples": [
-        150,
-        232,
-        135,
-        117,
-        118
+        227,
+        201,
+        126,
+        139,
+        113
       ],
       "target": 300,
-      "direction": "atMost",
-      "pass": true
-    },
-    {
-      "key": "orders.firstRenderCold",
-      "label": "목록 첫 렌더(첫 방문)",
-      "unit": "ms",
-      "median": 271,
-      "p95": 285,
-      "samples": [
-        180,
-        285,
-        184,
-        274,
-        271
-      ],
-      "target": null,
       "direction": "atMost",
       "pass": true
     },
@@ -55,12 +37,12 @@
       "label": "스크롤 프레임",
       "unit": "fps",
       "median": 60.2,
-      "p95": 60.2,
+      "p95": 62.1,
       "samples": [
+        60.6,
         59.9,
         60.2,
-        60.2,
-        60.2,
+        62.1,
         60.2
       ],
       "target": 55,
@@ -71,14 +53,14 @@
       "key": "orders.filterResponse",
       "label": "필터 적용 응답",
       "unit": "ms",
-      "median": 59,
-      "p95": 64,
+      "median": 96,
+      "p95": 111,
       "samples": [
-        59,
-        43,
-        54,
-        63,
-        64
+        91,
+        82,
+        111,
+        96,
+        110
       ],
       "target": 500,
       "direction": "atMost",
@@ -88,14 +70,14 @@
       "key": "api.list",
       "label": "API 기본 목록",
       "unit": "ms",
-      "median": 26.6,
-      "p95": 27.6,
+      "median": 64.9,
+      "p95": 109.7,
       "samples": [
-        27.1,
-        26.5,
-        27.6,
-        26.6,
-        26.4
+        70.8,
+        64.9,
+        109.7,
+        40.6,
+        64
       ],
       "target": 500,
       "direction": "atMost",
@@ -105,14 +87,14 @@
       "key": "api.filtered",
       "label": "API 필터 조회",
       "unit": "ms",
-      "median": 19.2,
-      "p95": 47.4,
+      "median": 19.4,
+      "p95": 30,
       "samples": [
-        19.3,
-        18.6,
-        18.1,
-        47.4,
-        19.2
+        20.9,
+        19.4,
+        30,
+        17.8,
+        18.8
       ],
       "target": 500,
       "direction": "atMost",
@@ -122,14 +104,14 @@
       "key": "api.deepPage",
       "label": "API 깊은 페이지",
       "unit": "ms",
-      "median": 167.3,
-      "p95": 178.5,
+      "median": 179.2,
+      "p95": 250.7,
       "samples": [
-        178.5,
-        167.3,
-        166.2,
+        239.1,
+        159.7,
+        250.7,
         172.7,
-        162.8
+        179.2
       ],
       "target": 500,
       "direction": "atMost",

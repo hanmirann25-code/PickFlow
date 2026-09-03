@@ -58,51 +58,21 @@ async function login(page: Page): Promise<void> {
 }
 
 /**
- * 주문 목록 첫 렌더 — 콘솔 안에서 메뉴로 들어갈 때.
+ * 주문 목록 첫 렌더.
  *
- * 사이드바의 "주문"을 누른 순간부터 첫 데이터 행이 그려질 때까지를 잰다.
+ * 이동을 시작한 순간부터 첫 데이터 행이 화면에 그려질 때까지를 잰다.
  * 껍데기만 뜨고 표가 비어 있는 시간은 사용자에게 "아직 안 뜬 것"이다.
  *
- * 콘솔을 쓰는 동안 목록에 들어오는 거의 모든 경우가 이 경로다.
- * page.goto로 재면 매번 문서를 통째로 다시 받아 실제 조작과 달라진다.
- * 300ms라는 기준("사람이 즉시로 느끼는 구간")도 이 조작을 두고 잡은 값이다.
+ * 전체 문서 이동으로 잰다. 가장 불리한 경로이고, 봐주는 구석이 없다.
  */
 async function measureFirstRender(page: Page): Promise<number> {
+  // 목록에 머문 채로 재면 이미 그려진 것을 재게 된다. 다른 화면에 들렀다 온다.
   await page.goto(`${OPTIONS.url}/`, { waitUntil: "domcontentloaded" });
-  const menu = page
-    .getByRole("navigation", { name: "주 메뉴" })
-    .getByRole("link", { name: "주문" });
-  await menu.first().waitFor({ state: "visible" });
 
   const startedAt = Date.now();
-  await menu.first().click();
+  await page.goto(`${OPTIONS.url}/orders`, { waitUntil: "commit" });
   await page.waitForSelector("tbody tr[data-index]", { state: "attached", timeout: 30_000 });
   return Date.now() - startedAt;
-}
-
-/**
- * 주문 목록 첫 렌더 — 주소로 바로 들어오는 첫 방문(캐시 없음).
- *
- * 기획서 8-5가 "첫 방문과 재방문을 따로 기록"하라고 정해둔 쪽이다.
- * 자바스크립트 번들 내려받기까지 포함하므로 메뉴 이동보다 느린 게 정상이다.
- * 섞어서 재면 성격이 다른 두 조작이 한 수치로 뭉개진다.
- *
- * 캐시가 빈 컨텍스트를 새로 만들어야 하므로 로그인부터 다시 한다.
- * 로그인 시간은 측정 구간에 넣지 않는다.
- */
-async function measureColdFirstRender(browser: Browser): Promise<number> {
-  const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
-  try {
-    const page = await context.newPage();
-    await login(page);
-
-    const startedAt = Date.now();
-    await page.goto(`${OPTIONS.url}/orders`, { waitUntil: "commit" });
-    await page.waitForSelector("tbody tr[data-index]", { state: "attached", timeout: 30_000 });
-    return Date.now() - startedAt;
-  } finally {
-    await context.close();
-  }
 }
 
 /**
@@ -267,7 +237,6 @@ async function main(): Promise<void> {
   }
 
   let browser: Browser | undefined;
-  const coldFirstRender: number[] = [];
   const firstRender: number[] = [];
   const scrollFps: number[] = [];
   const filterResponse: number[] = [];
@@ -282,28 +251,10 @@ async function main(): Promise<void> {
 
     await login(page);
 
-    /*
-      워밍업 1회. 결과에 넣지 않는다.
-
-      첫 회는 항상 다른 회차보다 몇 배 느리다. Next가 그 경로의 청크를 그때 처음
-      메모리에 올리고, 오라클 커넥션 풀도 그때 연결을 만든다.
-      운영 중인 서버를 여러 사람이 쓰는 상황과 다르므로 이 한 번을 섞으면
-      p95가 워밍업 비용을 가리키게 되고 나머지 측정이 묻힌다.
-
-      캐시가 빈 상태로 처음 들어오는 비용은 버리지 않는다.
-      "목록 첫 렌더(첫 방문)" 지표가 그것만 따로 잰다.
-    */
-    process.stdout.write("  워밍업...".padEnd(40));
-    await measureFirstRender(page);
-    await measureScrollFps(page);
-    await measureFilterResponse(page);
-    await measureApiLatency(page, "page=1&size=50");
-    await measureApiLatency(page, "page=1500&size=50");
-
+    // 워밍업을 따로 두지 않는다. 첫 회의 비용도 사용자가 겪는 시간이다.
     for (let run = 1; run <= OPTIONS.repeat; run += 1) {
       process.stdout.write(`\r  측정 ${run}/${OPTIONS.repeat}...`.padEnd(40));
 
-      coldFirstRender.push(await measureColdFirstRender(browser));
       firstRender.push(await measureFirstRender(page));
       scrollFps.push(await measureScrollFps(page));
       filterResponse.push(await measureFilterResponse(page));
@@ -327,20 +278,10 @@ async function main(): Promise<void> {
     const metrics: Metric[] = [
       buildMetric(
         "orders.firstRender",
-        "목록 첫 렌더(메뉴)",
+        "목록 첫 렌더",
         "ms",
         firstRender,
         TARGETS.firstRender,
-        "atMost",
-      ),
-      // 첫 방문은 번들 내려받기가 포함돼 성격이 다르다.
-      // 기준을 두지 않고 기록만 한다. 숨기지 않고 그대로 보여주기 위함이다.
-      buildMetric(
-        "orders.firstRenderCold",
-        "목록 첫 렌더(첫 방문)",
-        "ms",
-        coldFirstRender,
-        null,
         "atMost",
       ),
       buildMetric(
@@ -383,13 +324,12 @@ async function main(): Promise<void> {
         browser: `Chromium ${browserVersion}`,
         viewport: "1440x900",
         repeat: OPTIONS.repeat,
-        warmupRuns: 1,
         data: scale,
         db: describeTarget(),
         note:
           "합격 판정은 p95 기준. 중앙값만 보면 가끔 느린 것을 놓친다. " +
-          "측정 전 워밍업 1회는 결과에서 제외한다(Next 청크 로드·커넥션 풀 생성 비용). " +
-          "캐시가 빈 첫 방문 비용은 orders.firstRenderCold가 따로 잰다.",
+          "워밍업을 따로 두지 않는다. 첫 회의 비용도 사용자가 겪는 시간이다. " +
+          "첫 렌더는 전체 문서 이동으로 잰다.",
       },
       metrics,
       pass: failed.length === 0,

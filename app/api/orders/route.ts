@@ -1,13 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { query, queryOne } from "@/lib/db/query";
 import { requirePermission } from "@/lib/auth/guard";
-import { ORDER_STATUS_LABELS, isOrderStatus } from "@/lib/order-graph";
-import {
-  parseOrderListQuery,
-  buildListSql,
-  buildCountSql,
-  type OrderListRow,
-} from "@/lib/orders/list-query";
+import { parseOrderListQuery } from "@/lib/orders/list-query";
+import { queryOrderList } from "@/lib/orders/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -20,6 +14,9 @@ export const dynamic = "force-dynamic";
  *
  * 페이징·필터·정렬은 전부 SQL에서 처리한다.
  * 10만 건을 브라우저로 내려보내 거르는 방식은 쓰지 않는다.
+ *
+ * 첫 페이지는 화면이 서버 컴포넌트에서 미리 받아 가므로 이 라우트는
+ * 스크롤로 이어 받는 두 번째 페이지부터 주로 쓰인다.
  */
 export async function GET(request: NextRequest) {
   const guard = await requirePermission("order:read");
@@ -41,41 +38,12 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const params = parsed.data;
   const startedAt = Date.now();
-
-  const list = buildListSql(params);
-  const count = buildCountSql(params);
-
-  // 전체 건수는 별도 쿼리로 센다.
-  // 목록 쿼리에 COUNT(*) OVER ()를 붙이면 매 행마다 전체를 세느라 느려진다.
-  const [rows, total] = await Promise.all([
-    query<OrderListRow>(list.sql, list.binds),
-    queryOne<{ TOTAL: number }>(count.sql, count.binds),
-  ]);
-
+  const result = await queryOrderList(parsed.data);
   const elapsedMs = Date.now() - startedAt;
-  const totalCount = total?.TOTAL ?? 0;
 
   return NextResponse.json({
-    orders: rows.map((row) => ({
-      id: row.ID,
-      orderNo: row.ORDER_NO,
-      channel: row.CHANNEL,
-      recipientName: row.RECIPIENT_NAME,
-      status: row.STATUS,
-      // 색만으로 상태를 전달하지 않도록 화면이 쓸 한글 이름을 함께 내려준다.
-      statusLabel: isOrderStatus(row.STATUS) ? ORDER_STATUS_LABELS[row.STATUS] : row.STATUS,
-      orderedAt: row.ORDERED_AT,
-      dueAt: row.DUE_AT,
-      itemCount: row.ITEM_COUNT,
-    })),
-    page: {
-      page: params.page,
-      size: params.size,
-      total: totalCount,
-      totalPages: Math.max(1, Math.ceil(totalCount / params.size)),
-    },
+    ...result,
     // 실행 시간은 개발 환경에서만 내보낸다. 운영에서는 내부 정보를 굳이 노출하지 않는다.
     ...(process.env.NODE_ENV === "production" ? {} : { elapsedMs }),
   });

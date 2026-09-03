@@ -27,6 +27,14 @@ export type OrderFilters = {
 
 export const DEFAULT_SORT: SortKey = "orderedAt:desc";
 
+/**
+ * 한 번에 받아올 행 수.
+ *
+ * 서버 컴포넌트가 미리 조회하는 첫 페이지와 화면이 스크롤로 이어 받는 페이지가
+ * 같은 크기여야 한다. 다르면 초기 데이터가 화면의 조회 조건과 어긋나 버려진다.
+ */
+export const ORDERS_PAGE_SIZE = 100;
+
 const SORT_KEYS: readonly SortKey[] = [
   "orderedAt:desc",
   "orderedAt:asc",

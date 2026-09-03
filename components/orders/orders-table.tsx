@@ -10,10 +10,11 @@ import {
   useTable,
 } from "@tanstack/react-table";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { fetchOrders, type OrderRow } from "@/lib/orders/client";
+import { fetchOrders, type OrderListResponse, type OrderRow } from "@/lib/orders/client";
 import type { SortKey } from "@/lib/orders/list-query";
 import {
   EMPTY_FILTERS,
+  ORDERS_PAGE_SIZE,
   parseFilters,
   serializeFilters,
   type OrderFilters,
@@ -40,8 +41,8 @@ const features = tableFeatures({ rowSelectionFeature });
 const helper = createColumnHelper<typeof features, OrderRow>();
 const EMPTY: OrderRow[] = [];
 
-/** 한 번에 받아올 행 수. 스크롤을 조금만 내려도 다음 묶음이 붙도록 넉넉히 잡는다. */
-const PAGE_SIZE = 100;
+/** 한 번에 받아올 행 수. 서버가 미리 담아 보내는 첫 페이지와 같아야 한다. */
+const PAGE_SIZE = ORDERS_PAGE_SIZE;
 /** 행 높이(px). 가상 스크롤이 전체 높이를 계산하는 기준이라 실제 높이와 맞춰야 한다. */
 const ROW_HEIGHT = 44;
 
@@ -136,7 +137,15 @@ const columns = helper.columns([
   }),
 ]);
 
-export function OrdersTable() {
+export function OrdersTable({
+  initialData,
+  initialFilterKey,
+}: {
+  /** 서버 컴포넌트가 미리 받아둔 첫 페이지. */
+  initialData: OrderListResponse | null;
+  /** 그 데이터를 받을 때 쓴 조회 조건. 지금 조건과 다르면 쓰지 않는다. */
+  initialFilterKey: string;
+}) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -170,6 +179,16 @@ export function OrdersTable() {
     [pathname, router],
   );
 
+  /*
+    서버가 미리 받아둔 첫 페이지.
+
+    조건이 지금 화면의 조건과 같을 때만 쓴다.
+    같지 않은데 넘기면 React Query가 그 데이터를 새 조건의 첫 페이지로 삼아,
+    다른 조건의 목록이 잠깐 사실인 것처럼 보인다.
+  */
+  const currentFilterKey = serializeFilters(filters).toString();
+  const seeded = initialData && initialFilterKey === currentFilterKey ? initialData : null;
+
   const query = useInfiniteQuery({
     // 서버가 처리하는 조건은 전부 키에 넣는다. 하나라도 빠지면 옛 결과가 남는다.
     queryKey: ["orders", { size: PAGE_SIZE, ...filters }],
@@ -187,6 +206,7 @@ export function OrdersTable() {
     initialPageParam: 1,
     getNextPageParam: (last) =>
       last.page.page < last.page.totalPages ? last.page.page + 1 : undefined,
+    initialData: seeded ? { pages: [seeded], pageParams: [1] } : undefined,
   });
 
   // 받아온 페이지들을 한 줄로 편다. 페이지가 바뀔 때만 다시 만든다.
